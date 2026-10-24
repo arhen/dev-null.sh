@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
-use App\Queries\ChangelogQuery;
 use App\Queries\UpstreamContributionsQuery;
 use App\Services\GitHub;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
@@ -37,10 +36,11 @@ final class SyncUpstreamContributions implements ShouldBeUnique, ShouldQueue
     {
         /** @var array<int|string, int> $contributions */
         $contributions = [];
+        $repository = config()->string('services.github.repository');
 
         for ($page = 1; $page <= self::MaxPages; $page++) {
             $body = $github->request()
-                ->get('repos/'.ChangelogQuery::Repository.'/contributors', ['per_page' => self::PerPage, 'page' => $page])
+                ->get("repos/{$repository}/contributors", ['per_page' => self::PerPage, 'page' => $page])
                 ->throw()
                 ->json();
 

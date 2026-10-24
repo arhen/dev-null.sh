@@ -27,7 +27,7 @@ function upstreamContributor(int $id, int $contributions = 1, string $type = 'Us
  */
 function fakeUpstreamContributors(array $contributors): void
 {
-    Http::fake(['api.github.com/repos/nunomaduro/dev-null.sh/contributors*' => fn (Request $request) => Http::response(
+    Http::fake(['api.github.com/repos/'.config()->string('services.github.repository').'/contributors*' => fn (Request $request) => Http::response(
         array_slice($contributors, ((int) $request['page'] - 1) * 100, 100),
     )]);
 }
@@ -50,6 +50,17 @@ it('stores the changes github counts per account, keyed by the numeric id and wi
         ->and(resolve(UpstreamContributionsQuery::class)->countFor($other))->toBe(1);
 
     Http::assertSent(fn (Request $request): bool => $request['per_page'] === 100 && $request['page'] === 1);
+});
+
+it('reads contributions from the configured repository', function (): void {
+    config(['services.github.repository' => 'example/dev-null']);
+    fakeUpstreamContributors([upstreamContributor(583231)]);
+
+    dispatch_sync(new SyncUpstreamContributions());
+
+    expect(Cache::get(UpstreamContributionsQuery::CacheKey))->toBe(['583231' => 1]);
+
+    Http::assertSent(fn (Request $request): bool => str_starts_with($request->url(), 'https://api.github.com/repos/example/dev-null/contributors?'));
 });
 
 it('reads the contributor list until a page is not full', function (): void {
@@ -86,7 +97,7 @@ it('skips anonymous contributors and entries without a type', function (): void 
 
 it('throws when github fails, leaving the cached counts as they were', function (): void {
     Cache::forever(UpstreamContributionsQuery::CacheKey, ['583231' => 7]);
-    Http::fake(['api.github.com/repos/nunomaduro/dev-null.sh/contributors*' => Http::response([], 500)]);
+    Http::fake(['api.github.com/repos/'.config()->string('services.github.repository').'/contributors*' => Http::response([], 500)]);
 
     expect(fn () => dispatch_sync(new SyncUpstreamContributions()))->toThrow(RequestException::class);
 
@@ -96,7 +107,7 @@ it('throws when github fails, leaving the cached counts as they were', function 
 it('keeps the cached counts when a later page fails', function (): void {
     Cache::forever(UpstreamContributionsQuery::CacheKey, ['583231' => 7]);
 
-    Http::fake(['api.github.com/repos/nunomaduro/dev-null.sh/contributors*' => fn (Request $request) => (int) $request['page'] === 1
+    Http::fake(['api.github.com/repos/'.config()->string('services.github.repository').'/contributors*' => fn (Request $request) => (int) $request['page'] === 1
         ? Http::response(array_map(fn (int $id): array => upstreamContributor($id), range(1, 100)))
         : Http::response([], 500)]);
 
@@ -107,7 +118,7 @@ it('keeps the cached counts when a later page fails', function (): void {
 
 it('keeps the cached counts when github does not return a contributor list', function (mixed $body): void {
     Cache::forever(UpstreamContributionsQuery::CacheKey, ['583231' => 7]);
-    Http::fake(['api.github.com/repos/nunomaduro/dev-null.sh/contributors*' => Http::response($body)]);
+    Http::fake(['api.github.com/repos/'.config()->string('services.github.repository').'/contributors*' => Http::response($body)]);
 
     expect(fn () => dispatch_sync(new SyncUpstreamContributions()))->toThrow(RuntimeException::class);
 
