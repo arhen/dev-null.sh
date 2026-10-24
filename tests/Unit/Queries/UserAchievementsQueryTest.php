@@ -31,7 +31,7 @@ it('calculates initial rank and zero progress for a new user without activity', 
         ->and($result['level_progress'])->toBe(0)
         ->and($result['ranks'])->toHaveCount(6)
         ->and($result['xp_breakdown']['commits']['xp'])->toBe(0)
-        ->and($result['badges'])->toHaveCount(17);
+        ->and($result['badges'])->toHaveCount(14);
 
     foreach ($result['badges'] as $badge) {
         expect($badge['unlocked'])->toBeFalse()
@@ -300,42 +300,40 @@ it('does not identify Tom by a mutable username', function (): void {
     expect(collect($result['badges'])->firstWhere('id', 'luddite')['unlocked'])->toBeFalse();
 });
 
-it('locks the contributor badges while no contributor counts are cached', function (): void {
+it('locks the contributor badge while no contributor counts are cached', function (): void {
     $user = User::factory()->create();
 
     $result = resolve(UserAchievementsQuery::class)->get($user, null);
 
-    foreach ([Achievement::Patch, Achievement::Upstream, Achievement::Sudoers, Achievement::Mknod] as $achievement) {
-        expect(collect($result['badges'])->firstWhere('id', $achievement->value))->toMatchArray([
-            'target' => $achievement->target(),
-            'progress' => 0,
-            'unlocked' => false,
-        ]);
-    }
+    expect(collect($result['badges'])->firstWhere('id', Achievement::Contributor->value))->toMatchArray([
+        'target' => 1,
+        'progress' => 0,
+        'unlocked' => false,
+    ]);
 });
 
-it('caps each contributor badge at its target as the github count grows', function (int $contributions, array $tiers): void {
+it('unlocks one contributor badge for any positive github contribution count without awarding xp', function (int $contributions, int $progress, bool $unlocked): void {
     $user = User::factory()->create(['github_id' => '583231']);
     Cache::forever(UpstreamContributionsQuery::CacheKey, ['583231' => $contributions]);
 
     $result = resolve(UserAchievementsQuery::class)->get($user, null);
 
-    expect(collect($result['badges'])
-        ->whereIn('id', [Achievement::Patch->value, Achievement::Upstream->value, Achievement::Sudoers->value, Achievement::Mknod->value])
-        ->map(fn (array $badge): array => [$badge['progress'], $badge['unlocked']])
-        ->values()
-        ->all())->toBe($tiers)
+    expect(collect($result['badges'])->firstWhere('id', Achievement::Contributor->value))->toMatchArray([
+        'name' => 'contributor',
+        'description' => 'Contributed to the /dev/null source code.',
+        'icon' => 'git-pull-request',
+        'target' => 1,
+        'progress' => $progress,
+        'unlocked' => $unlocked,
+    ])->and($result['badges'])->toHaveCount(14)
         ->and($result['xp'])->toBe(0);
 })->with([
-    'no changes' => [0, [[0, false], [0, false], [0, false], [0, false]]],
-    'one change' => [1, [[1, true], [1, false], [1, false], [1, false]]],
-    'four changes' => [4, [[1, true], [4, false], [4, false], [4, false]]],
-    'five changes' => [5, [[1, true], [5, true], [5, false], [5, false]]],
-    'twenty-four changes' => [24, [[1, true], [5, true], [24, false], [24, false]]],
-    'twenty-five changes' => [25, [[1, true], [5, true], [25, true], [25, false]]],
-    'ninety-nine changes' => [99, [[1, true], [5, true], [25, true], [99, false]]],
-    'a hundred changes' => [100, [[1, true], [5, true], [25, true], [100, true]]],
-    'a hundred and fifty changes' => [150, [[1, true], [5, true], [25, true], [100, true]]],
+    'no contributions' => [0, 0, false],
+    'one contribution' => [1, 1, true],
+    'five contributions' => [5, 1, true],
+    'twenty-five contributions' => [25, 1, true],
+    'a hundred contributions' => [100, 1, true],
+    'a hundred and fifty contributions' => [150, 1, true],
 ]);
 
 it('matches contributor counts by github id, not by a username someone else can take', function (): void {
@@ -344,7 +342,7 @@ it('matches contributor counts by github id, not by a username someone else can 
 
     $result = resolve(UserAchievementsQuery::class)->get($user, null);
 
-    expect(collect($result['badges'])->firstWhere('id', Achievement::Mknod->value)['progress'])->toBe(0);
+    expect(collect($result['badges'])->firstWhere('id', Achievement::Contributor->value)['progress'])->toBe(0);
 });
 
 it('matches a numeric github id after the counts come back from a serialized cache store', function (): void {
@@ -362,7 +360,7 @@ it('renders the achievements without calling github', function (): void {
     Cache::forever(UpstreamContributionsQuery::CacheKey, ['583231' => 5]);
     $user = User::factory()->create(['github_id' => '583231']);
 
-    expect(resolve(UserAchievementsQuery::class)->get($user, $user)['badges'])->toHaveCount(17);
+    expect(resolve(UserAchievementsQuery::class)->get($user, $user)['badges'])->toHaveCount(14);
 
     Http::assertNothingSent();
 });

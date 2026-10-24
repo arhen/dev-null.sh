@@ -183,21 +183,9 @@ final readonly class UserAchievementsQuery
                 'progress' => min($user->pasteis_received, Achievement::SweetTooth->target()),
                 'target' => Achievement::SweetTooth->target(),
             ],
-            Achievement::Patch->value => [
-                'progress' => min($upstreamContributions, Achievement::Patch->target()),
-                'target' => Achievement::Patch->target(),
-            ],
-            Achievement::Upstream->value => [
-                'progress' => min($upstreamContributions, Achievement::Upstream->target()),
-                'target' => Achievement::Upstream->target(),
-            ],
-            Achievement::Sudoers->value => [
-                'progress' => min($upstreamContributions, Achievement::Sudoers->target()),
-                'target' => Achievement::Sudoers->target(),
-            ],
-            Achievement::Mknod->value => [
-                'progress' => min($upstreamContributions, Achievement::Mknod->target()),
-                'target' => Achievement::Mknod->target(),
+            Achievement::Contributor->value => [
+                'progress' => min($upstreamContributions, Achievement::Contributor->target()),
+                'target' => Achievement::Contributor->target(),
             ],
             Achievement::Luddite->value => [
                 'progress' => $hasUnfollowedTom ? 1 : 0,
